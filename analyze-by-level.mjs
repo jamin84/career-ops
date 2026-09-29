@@ -10,13 +10,15 @@
  *      node analyze-by-level.mjs --json   (machine-readable)
  */
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { getCareerOpsRoot } from './path-resolver.mjs';
 
-const ROOT = dirname(fileURLToPath(import.meta.url));
-const APPS = existsSync(join(ROOT, 'data/applications.md'))
-  ? join(ROOT, 'data/applications.md')
-  : join(ROOT, 'applications.md');
+// User-layer files resolve against the configured data root, not the codebase
+// root — CAREER_OPS_ROOT / .career-ops-data may point elsewhere (v1.34).
+const CAREER_OPS = getCareerOpsRoot();
+const APPS = existsSync(join(CAREER_OPS, 'data/applications.md'))
+  ? join(CAREER_OPS, 'data/applications.md')
+  : join(CAREER_OPS, 'applications.md');
 
 const ACTIONABLE = ['Applied', 'Rejected', 'Responded', 'Interview', 'Offer', 'Discarded'];
 const ENGAGED = ['Responded', 'Interview', 'Offer'];
