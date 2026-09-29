@@ -10,7 +10,7 @@ import {
   markApplicationOutreachSent,
   parseCompBand,
   recommendAsk,
-} from "./applications-data.mjs";
+} from "../dashboard/applications-data.mjs";
 
 test("groups tracker roles by company and enriches them with job posting URLs", async (t) => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "career-ops-dashboard-"));
