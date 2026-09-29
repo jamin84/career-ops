@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>career-ops companies</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="companies-shell">
+      <header class="companies-header">
+        <div>
+          <p class="eyebrow">career-ops</p>
+          <h1>Companies</h1>
+          <p class="page-description">A read-only view of every tracked opportunity, grouped by company.</p>
+        </div>
+        <button id="companiesRefreshButton" class="icon-button" type="button" title="Refresh applications" aria-label="Refresh applications">R</button>
+      </header>
+
+      <nav class="page-tabs page-tabs-wide" aria-label="Dashboard pages">
+        <a href="/index.html">Files</a>
+        <a class="active" href="/companies.html" aria-current="page">Companies</a>
+      </nav>
+
+      <section class="summary-grid" aria-label="Application summary">
+        <div class="summary-card"><span>Companies</span><strong id="companyMetric">—</strong></div>
+        <div class="summary-card"><span>Roles</span><strong id="roleMetric">—</strong></div>
+        <div class="summary-card"><span>Submitted</span><strong id="submittedMetric">—</strong></div>
+        <div class="summary-card"><span>Average score</span><strong id="scoreMetric">—</strong></div>
+      </section>
+
+      <section class="companies-toolbar" aria-label="Company filters">
+        <label class="search companies-search">
+          <span>Search</span>
+          <input id="companySearchInput" type="search" autocomplete="off" placeholder="Company, role, status, or notes">
+        </label>
+        <label class="search status-filter">
+          <span>Status</span>
+          <select id="statusFilter">
+            <option value="All">All statuses</option>
+          </select>
+        </label>
+      </section>
+
+      <section id="columnFilters" class="column-filters" aria-label="Role column filters" hidden>
+        <label class="search">
+          <span>Role</span>
+          <input type="search" autocomplete="off" placeholder="Filter roles" data-column-filter="role">
+        </label>
+        <label class="search">
+          <span>Minimum score</span>
+          <input type="number" min="0" max="5" step="0.1" placeholder="Any" data-column-filter="minScore">
+        </label>
+        <label class="search">
+          <span>PDF</span>
+          <select data-column-filter="pdf">
+            <option value="All">All</option>
+            <option value="Ready">Ready</option>
+            <option value="Missing">Missing</option>
+          </select>
+        </label>
+        <label class="search">
+          <span>Evaluated since</span>
+          <input type="date" data-column-filter="evaluatedSince">
+        </label>
+        <label class="search">
+          <span>Job posting</span>
+          <select data-column-filter="jobPosting">
+            <option value="All">All</option>
+            <option value="Available">Available</option>
+            <option value="Missing">Missing</option>
+          </select>
+        </label>
+      </section>
+
+      <div class="company-count" id="companyCount" aria-live="polite"></div>
+      <section class="company-table-shell" id="companyList" aria-live="polite"></section>
+    </main>
+
+    <script src="/companies.js"></script>
+    <script src="/hot-reload.js"></script>
+  </body>
+</html>

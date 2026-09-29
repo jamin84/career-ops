@@ -24,6 +24,7 @@ const (
 	viewReport
 	viewProgress
 	viewStats
+	viewFiles
 )
 
 type appModel struct {
@@ -31,6 +32,7 @@ type appModel struct {
 	viewer          screens.ViewerModel
 	progress        screens.ProgressModel
 	stats           screens.StatsModel
+	files           screens.FilesModel
 	state           viewState
 	careerOpsPath   string
 	theme           theme.Theme
@@ -89,6 +91,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !(m.state == viewPipeline && m.pipeline.IsTextInputActive()) {
 				i18n.ToggleLang()
 			}
+		case "f", "F":
+			// Generated-documents browser. Carried from the v1.11 branch and
+			// rewired here 2026-09-29; upstream main.go has no Files screen.
+			if m.state == viewPipeline && !m.pipeline.IsTextInputActive() {
+				m.files = screens.NewFilesModel(
+					m.theme,
+					data.ListGeneratedFiles(m.careerOpsPath),
+					m.pipeline.Width(), m.pipeline.Height(),
+				)
+				m.state = viewFiles
+				return m, nil
+			}
 		}
 	}
 
@@ -97,6 +111,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pipeline.Resize(msg.Width, msg.Height)
 		if m.state == viewReport {
 			m.viewer.Resize(msg.Width, msg.Height)
+		}
+		if m.state == viewFiles {
+			m.files.Resize(msg.Width, msg.Height)
 		}
 		if m.state == viewProgress {
 			m.progress.Resize(msg.Width, msg.Height)
@@ -243,6 +260,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stats = sm
 			return m, cmd
 		}
+		if m.state == viewFiles {
+			fm, cmd := m.files.Update(msg)
+			m.files = fm
+			return m, cmd
+		}
 		pm, cmd := m.pipeline.Update(msg)
 		m.pipeline = pm
 		return m, cmd
@@ -311,6 +333,8 @@ func (m appModel) View() string {
 		return m.progress.View()
 	case viewStats:
 		return m.stats.View()
+	case viewFiles:
+		return m.files.View()
 	default:
 		return m.pipeline.View()
 	}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>career-ops files</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Generated files">
+        <header class="sidebar-header">
+          <div>
+            <p class="eyebrow">career-ops</p>
+            <h1>Generated Files</h1>
+          </div>
+          <button id="refreshButton" class="icon-button" type="button" title="Refresh files" aria-label="Refresh files">R</button>
+        </header>
+
+        <nav class="page-tabs" aria-label="Dashboard pages">
+          <a class="active" href="/index.html" aria-current="page">Files</a>
+          <a href="/companies.html">Companies</a>
+        </nav>
+
+        <label class="search">
+          <span>Search</span>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="Finastra, report, outreach">
+        </label>
+
+        <nav class="segments" aria-label="File type">
+          <button class="segment active" type="button" data-category="All">All</button>
+          <button class="segment" type="button" data-category="Prep">Prep</button>
+          <button class="segment" type="button" data-category="Report">Reports</button>
+          <button class="segment" type="button" data-category="Output">Output</button>
+        </nav>
+
+        <div class="file-count" id="fileCount"></div>
+        <ol class="file-list" id="fileList"></ol>
+      </aside>
+
+      <section class="reader" aria-live="polite">
+        <header class="reader-header">
+          <div>
+            <p class="eyebrow" id="selectedPath">No file selected</p>
+            <h2 id="selectedTitle">Select a generated file</h2>
+          </div>
+          <a id="rawLink" class="raw-link" href="#" target="_blank" rel="noreferrer">Raw</a>
+        </header>
+        <article class="document" id="document"></article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+    <script src="/hot-reload.js"></script>
+  </body>
+</html>

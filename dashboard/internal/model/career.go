@@ -29,6 +29,17 @@ type CareerApplication struct {
 	CompEstimate string
 }
 
+// GeneratedFile represents a local markdown document produced by career-ops.
+// Added on the v1.11 branch for the Files screen; carried forward 2026-09-29.
+type GeneratedFile struct {
+	Title    string
+	Path     string
+	RelPath  string
+	Category string
+	Modified string
+	Size     int64
+}
+
 // PipelineMetrics holds aggregate stats for the pipeline dashboard.
 type PipelineMetrics struct {
 	Total      int
