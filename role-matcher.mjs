@@ -106,6 +106,10 @@ export const SHORT_SPECIALTY = new Set([
   // grammar words (of, and, for, end, new) are excluded — extractSeniorities,
   // extractLevels and ROLE_STOPWORDS already own those, and promoting them to
   // content tokens would make every "Senior X" differ from "X".
+  //
+  // Local divergence from upstream, which excludes ai/ml on purpose; kept here
+  // because this tracker's same-company pairs need them (re-applied over
+  // v1.37.0, whose #5266 fix supersedes the local roleFuzzyMatch change).
   'ai', 'ml', 'fde', 'gtm', 'iam', 'gov', 'ops',
   'web', 'app', 'rcm', 'ehr', 'sap', 'dns', 'vpn',
   'dna', 'ads', 'sem', 'tax', 'pay', 'rss', 'js', 'os', 'ip',
@@ -299,37 +303,28 @@ export function roleFuzzyMatch(a, b) {
     if (extraTokens.some(w => !BASELINE_TOKENS.has(w))) return false;
   }
 
-  // MUTUAL SPECIALIZATION: each side carries a non-baseline word the other
-  // lacks. The subset guard above is the one-sided case of this — a generic
-  // base title vs the same title plus a team suffix. This is the two-sided
-  // case, and it is the stronger signal: two titles that each name a
-  // different team are two separately-postable openings, not one opening
-  // loosely rewritten.
+  // A content word on EACH side that the other title lacks is two
+  // disagreements, not a loose rewrite of one opening. The subset guard above
+  // only sees a word on one side, and the Jaccard cut-off below cannot see
+  // this at all: three shared words plus one unique word per side score
+  // exactly 0.6. "Customer Success Manager, Enterprise" vs "Customer Success
+  // Manager, Commercial" (and "Machine Learning Engineer, Vision" vs "...,
+  // Speech") therefore matched, and merge-tracker folded the second
+  // requisition into the first, overwriting its score, date and report link.
   //
-  // Jaccard alone cannot see this. Two same-length token sets sharing a
-  // generic prefix score exactly 3/5 = 0.60 and clear the threshold on the
-  // nose, which is how "Engineering Manager, UI Platform" matched
-  // "Engineering Manager, Claude Platform" and "Manager, Software Engineering
-  // (App Experiences)" matched "(App Infrastructure)" — the words that make
-  // them distinct reqs were the only words not being compared (#4291).
-  //
-  // Measured cost of getting this wrong in merge-tracker: a live
-  // `Affirm / Manager, Software Engineering (App Experiences)` row at 4.4,
-  // status Applied, was overwritten in place by an unrelated 2.0/SKIP
-  // evaluation of (App Infrastructure) — same date, same score, same report
-  // link, the application history gone. The merge reported "+0 added,
-  // 2 updated". The tracker is gitignored and no .bak is written.
-  //
-  // Formerly gated on a one-sided level difference (#4058); that case is the
-  // same disagreement with a level stacked on top, so it is subsumed here.
-  // Mirrors the subset guard: baseline-only differences never split.
-  {
-    const setA = new Set(wordsA);
-    const uniqueA = wordsA.filter(w => !setB.has(w));
-    const uniqueB = wordsB.filter(w => !setA.has(w));
-    if (uniqueA.some(w => !BASELINE_TOKENS.has(w)) &&
-        uniqueB.some(w => !BASELINE_TOKENS.has(w))) return false;
-  }
+  // #4058 added this guard for the one case where a level sat on one side
+  // only ("Front Desk Assistant (Summer Housing)" vs "Administrative
+  // Assistant II (Housing Front Desk)"); the vocabulary disagreement is the
+  // signal, the level was only how that report found it. Mirrors the subset
+  // guard: baseline-only differences do not split, and neither does a plural
+  // ("Solution Architecture" vs "Solutions Architecture").
+  const setA = new Set(wordsA);
+  const isPluralOf = (x, y) => x === `${y}s` || y === `${x}s`;
+  const uniqueA = wordsA.filter(w => !setB.has(w) && !BASELINE_TOKENS.has(w));
+  const uniqueB = wordsB.filter(w => !setA.has(w) && !BASELINE_TOKENS.has(w));
+  const unmatchedA = uniqueA.filter(x => !uniqueB.some(y => isPluralOf(x, y)));
+  const unmatchedB = uniqueB.filter(y => !uniqueA.some(x => isPluralOf(x, y)));
+  if (unmatchedA.length > 0 && unmatchedB.length > 0) return false;
 
   // Use a true set-based Jaccard ratio. Dividing by the smaller title inflates
   // matches for roles that share a long generic prefix but differ in specialty.
