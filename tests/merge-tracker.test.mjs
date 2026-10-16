@@ -7,7 +7,7 @@
 import { pass, fail, NODE, ROOT } from './helpers.mjs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 
@@ -54,38 +54,37 @@ function runMergeDetailed(additions, opts = {}) {
         writeFileSync(join(addsDir, name), line);
       }
     }
-    let output = '';
-    let exitCode = 0;
-    let killedBy = null;
-    try {
-      output = execFileSync(NODE, [join(ROOT, 'merge-tracker.mjs')], {
-        encoding: 'utf-8',
-        timeout: 30000,
-        // Capture stderr instead of letting execFileSync echo it: the
-        // separator-row fixture below deliberately triggers a loud failure,
-        // and its error text would otherwise land in the suite's own log.
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, CAREER_OPS_TRACKER: tracker, CAREER_OPS_ADDITIONS: addsDir },
-      });
-    } catch (e) {
-      output = String(e.stdout ?? '') + String(e.stderr ?? '');
-      // A normal non-zero exit carries `status`; a kill (the 30s timeout, or
-      // any other signal) carries `signal` with a null status. Collapsing both
-      // to -1 would let a HUNG merge-tracker satisfy an `exitCode !== 0`
-      // assertion, so the separator test would pass on a hang — the opposite
-      // of what it checks. Surface the signal separately and let the caller
-      // fail on it.
-      if (typeof e.status === 'number') {
-        exitCode = e.status;
-      } else {
-        killedBy = e.signal ?? 'unknown';
-        exitCode = null;
-      }
-    }
+    // spawnSync, not execFileSync: it hands back BOTH streams on every exit
+    // path. execFileSync returns stdout alone when the command succeeds and
+    // only exposes stderr through the thrown error, so `output` carried
+    // stdout+stderr on a failing run but stdout alone on a passing one — and
+    // merge-tracker sends every ⚠️ to stderr. A warning emitted on a
+    // successful merge was therefore invisible to assertions here, which is
+    // the class of defect that let an overwrite pass for success in the first
+    // place. stderr is still piped rather than inherited, so the fixtures that
+    // deliberately fail loudly don't litter the suite log.
+    const proc = spawnSync(NODE, [join(ROOT, 'merge-tracker.mjs')], {
+      encoding: 'utf-8',
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CAREER_OPS_TRACKER: tracker, CAREER_OPS_ADDITIONS: addsDir },
+    });
+    const stdout = String(proc.stdout ?? '');
+    const stderr = String(proc.stderr ?? '');
+    const output = stdout + stderr;
+    // A normal exit carries a numeric `status`; a kill (the 30s timeout, or any
+    // other signal) carries `signal` with a null status. Collapsing both to -1
+    // would let a HUNG merge-tracker satisfy an `exitCode !== 0` assertion, so
+    // the separator test would pass on a hang — the opposite of what it checks.
+    // Surface the signal separately and let the caller fail on it.
+    const killedBy = typeof proc.status === 'number' ? null : (proc.signal ?? 'unknown');
+    const exitCode = typeof proc.status === 'number' ? proc.status : null;
     const mergedDir = join(addsDir, 'merged');
     return {
       tracker: readFileSync(tracker, 'utf-8'),
       output,
+      stdout,
+      stderr,
       exitCode,
       killedBy,
       archived: existsSync(mergedDir) ? readdirSync(mergedDir) : [],
@@ -853,4 +852,109 @@ try {
   }
 } catch (e) {
   fail(`merge-tracker #4058 tests crashed: ${e.message}`);
+}
+
+// ── Mutual specialization + committed-status overwrite guard (#4291) ────────
+// Two measured losses. Both rows carried no URL and a different report number,
+// so the company + fuzzy-role tier decided, and both titles shared a generic
+// prefix with exactly one distinguishing word each — scoring 3/5 = 0.60 and
+// clearing the Jaccard threshold on the nose. The merge overwrote each live row
+// in place and reported "+0 added, 2 updated".
+//
+// Two independent fixes are asserted here: the role-matcher now splits the
+// pairs (rows 1-2), and even when the matcher is wrong the merge refuses to
+// rewrite a row holding application history (row 3).
+console.log('\nmerge-tracker.mjs — mutual specialization never overwrites a live row (#4291)');
+try {
+  // 1. Anthropic: "UI Platform" vs "Claude Platform" — the shared words are
+  //    engineering/manager/platform, the distinguishing ones are ui/claude.
+  const SEED_ANTH = '| 67 | 2026-07-07 | Anthropic | Engineering Manager, UI Platform | 3.9/5 | Evaluated | ❌ | [67](reports/67-anthropic.md) | |\n';
+  const anth = runMergeDetailed({
+    '624-anthropic.tsv': '624\t2026-10-14\tAnthropic\tEngineering Manager, Claude Platform\tEvaluated\t3.9/5\t❌\t[624](reports/624-anthropic.md)\t\n',
+  }, { rows: SEED_ANTH });
+  const anthRows = dataRows(anth.tracker);
+  if (anthRows.length === 2 && anth.tracker.includes('UI Platform') && anth.tracker.includes('Claude Platform')) {
+    pass('merge-tracker keeps "UI Platform" and "Claude Platform" as two rows (#4291)');
+  } else {
+    fail(`merge-tracker collapsed the Anthropic pair: ${anthRows.join(' // ')}`);
+  }
+
+  // 2. Affirm: the row that was actually destroyed — 4.4 and status Applied,
+  //    overwritten by a 2.0/SKIP evaluation of a different team's req.
+  const SEED_AFF = '| 302 | 2026-08-24 | Affirm | Manager, Software Engineering (App Experiences) | 4.4/5 | Applied | ✅ | [302](reports/302-affirm.md) | Applied 2026-08-24 |\n';
+  const aff = runMergeDetailed({
+    '623-affirm.tsv': '623\t2026-10-14\tAffirm\tManager, Software Engineering (App Infrastructure)\tSKIP\t2.0/5\t❌\t[623](reports/623-affirm.md)\t\n',
+  }, { rows: SEED_AFF });
+  const affRows = dataRows(aff.tracker);
+  const liveRow = affRows.find(r => r.includes('App Experiences'));
+  if (affRows.length === 2 && liveRow && liveRow.includes('4.4/5') && liveRow.includes('Applied')
+      && liveRow.includes('[302]') && liveRow.includes('2026-08-24')) {
+    pass('merge-tracker leaves the Applied 4.4 Affirm row untouched and adds the SKIP as a new row (#4291)');
+  } else {
+    fail(`merge-tracker damaged the Affirm row: ${affRows.join(' // ')}`);
+  }
+
+  // 3. A fuzzy match landing on a committed row still writes through — "Sr X
+  //    (Remote)" vs "Senior X" is one req reworded — but the run must SAY so.
+  //    The aggregate "N updated" is what let two losses pass for success.
+  const SEED_COMMIT = '| 5 | 2026-08-01 | Acme Corp | Engineering Manager, Payments | 4.5/5 | Interview | ✅ | [5](reports/5-acme.md) | Round 2 scheduled |\n';
+  const commit = runMergeDetailed({
+    '9-acme.tsv': '9\t2026-10-14\tAcme Corp\tEngineering Manager - Payments\tEvaluated\t2.1/5\t❌\t[9](reports/9-acme.md)\t\n',
+  }, { rows: SEED_COMMIT });
+  const commitRows = dataRows(commit.tracker);
+  if (commitRows.length === 1 && /🔄 .*updated row #5 Acme Corp/.test(commit.output)
+      && /4\.5\/5 → 2\.1\/5/.test(commit.output)) {
+    pass('merge-tracker names the row it rewrote, with the score transition (#4291)');
+  } else {
+    fail(`merge-tracker did not report the rewritten row: rows=${commitRows.length} | ${commit.output.trim()}`);
+  }
+  if (/status is Interview/.test(commit.output) && /application history/.test(commit.output)) {
+    pass('merge-tracker warns when a fuzzy match rewrites a committed row (#4291)');
+  } else {
+    fail(`merge-tracker rewrote an Interview row from a fuzzy match with no warning: ${commit.output.trim()}`);
+  }
+
+  // 4. Control: an exact-title re-eval of a committed row writes through and
+  //    keeps its status, as before.
+  const reeval = runMergeDetailed({
+    '9-acme.tsv': '9\t2026-10-14\tAcme Corp\tEngineering Manager, Payments\tEvaluated\t4.7/5\t❌\t[9](reports/9-acme.md)\t\n',
+  }, { rows: SEED_COMMIT });
+  const reevalRows = dataRows(reeval.tracker);
+  if (reeval.exitCode === 0 && reevalRows.length === 1 && reevalRows[0].includes('4.7/5')
+      && reevalRows[0].includes('Interview')) {
+    pass('merge-tracker still re-scores a committed row, keeping its status (#4291 control)');
+  } else {
+    fail(`merge-tracker re-eval control failed: exit=${reeval.exitCode} rows=${reevalRows.length}: ${reevalRows.join(' // ')} | ${reeval.output.trim()}`);
+  }
+} catch (e) {
+  fail(`merge-tracker #4291 tests crashed: ${e.message}`);
+}
+
+// ── Short-acronym qualifiers must survive tokenization (#4291) ─────────────
+// The >3-char token filter erased the only distinguishing word from these
+// same-company pairs, so they reached the Jaccard check as the SAME title.
+// Both were live in a real tracker and one pair was two Applied rows.
+console.log('\nmerge-tracker.mjs — short-acronym qualifiers keep sibling reqs apart (#4291)');
+try {
+  const cases = [
+    ['Senior Engineering Manager, GTM', 'Senior Engineering Manager, Product', 'GTM vs Product'],
+    ['Engineering Manager, Platform Engineering', 'Engineering Manager, IAM', 'Platform vs IAM'],
+    ['Forward Deployed Engineer (FDE)', 'Forward Deployed Engineer, Gov', 'FDE vs Gov'],
+    ['Engineering Manager, AI', 'Engineering Manager, Payments', 'AI vs Payments'],
+  ];
+  for (const [roleA, roleB, label] of cases) {
+    const seed = `| 1 | 2026-08-01 | Acme Corp | ${roleA} | 4.0/5 | Applied | ❌ | [1](reports/1-acme.md) | sent |\n`;
+    const res = runMergeDetailed({
+      '2-acme.tsv': `2\t2026-10-14\tAcme Corp\t${roleB}\tEvaluated\t2.0/5\t❌\t[2](reports/2-acme.md)\t\n`,
+    }, { rows: seed });
+    const rows = dataRows(res.tracker);
+    const kept = rows.find(r => r.includes(roleA));
+    if (rows.length === 2 && kept && kept.includes('4.0/5') && kept.includes('Applied')) {
+      pass(`merge-tracker keeps ${label} as two rows, Applied row intact (#4291)`);
+    } else {
+      fail(`merge-tracker collapsed ${label}: ${rows.join(' // ')}`);
+    }
+  }
+} catch (e) {
+  fail(`merge-tracker short-acronym tests crashed: ${e.message}`);
 }

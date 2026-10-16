@@ -217,10 +217,22 @@ function validateStatus(status) {
   return 'Evaluated';
 }
 
-// normalizeVia (Unicode-aware Via/agency key, #1596/#1603) lives in
-// tracker-parse.mjs so merge-tracker and analyze-patterns share ONE normalizer
-// and agency identity can't drift between scripts. (normalizeCompany lives in
-// tracker-utils.mjs since #1460 so every tracker writer shares one company key.)
+/**
+ * States that record something the USER did, not something the script derived.
+ *
+ * What an `Evaluated` or `SKIP` row holds can be rebuilt from reports/. These
+ * four cannot: nothing else in the repo records that an application was sent,
+ * that a company replied, that interviews are underway, or that an offer is in
+ * hand. Routed through validateStatus() so `**Applied**` and a Spanish alias
+ * resolve the same as `Applied`.
+ *
+ * @param {string} status - Raw status cell from a tracker row.
+ * @returns {boolean} True when the row carries user-only application history.
+ */
+const COMMITTED_STATUSES = new Set(['Applied', 'Responded', 'Interview', 'Offer']);
+function isCommittedStatus(status) {
+  return COMMITTED_STATUSES.has(validateStatus(String(status ?? '')));
+}
 
 /**
  * Extract the bracketed report number from a Markdown report link.
@@ -1607,6 +1619,7 @@ for (const file of tsvFiles) {
       // tracker row id and behavior is unchanged.
       && (!app.addedThisRun || roleFuzzyMatch(addition.role, app.role))
     );
+    if (duplicate) dupReason = 'entry-num';
   }
 
   if (!duplicate) {
@@ -1703,6 +1716,7 @@ for (const file of tsvFiles) {
     };
     duplicate = existingApps.find(app => fuzzyTierMatch(app, false))
       || existingApps.find(app => fuzzyTierMatch(app, true));
+    if (duplicate) dupReason = 'fuzzy';
   }
 
   if (duplicate) {
@@ -1724,6 +1738,9 @@ for (const file of tsvFiles) {
     }
     const newScore = parseScore(addition.score);
     const oldScore = parseScore(duplicate.score);
+    // `duplicate` is re-parsed from the written line after the update, so the
+    // row's prior score has to be captured here to be reportable afterwards.
+    const prevScoreText = String(duplicate.score ?? '').trim() || '—';
 
     // A re-evaluation writes through in BOTH directions. A lower score is not
     // noise to discard — it is newer information, and often the most valuable
@@ -1812,6 +1829,40 @@ for (const file of tsvFiles) {
       if (refreshed) Object.assign(duplicate, refreshed);
       else duplicate.raw = updatedLine;
       updated++;
+
+      // SAY WHICH ROW WAS REWRITTEN (#4291).
+      //
+      // An update is a destructive write: the row's date, score, PDF flag,
+      // report link and notes are replaced by the addition's, and the tracker
+      // is gitignored with no .bak. Until now the only trace a run left was the
+      // aggregate "🔄N updated" in the summary, which reads as success whether
+      // the N rows were genuine re-evaluations or rows a bad fuzzy match
+      // happened to land on. Two live rows were overwritten and the run printed
+      // "+0 added, 2 updated"; the loss surfaced days later, by eye.
+      //
+      // Printing the row identity and the tier that claimed it makes a
+      // mis-pairing legible at the moment it happens, which is the only moment
+      // it is cheap to undo.
+      console.log(
+        `🔄 ${file}: updated row #${duplicate.num} ${duplicate.company} — `
+        + `${duplicate.role} [matched on ${dupReason ?? 'report-num'}] `
+        + `${prevScoreText} → ${String(duplicate.score ?? '').trim() || '—'}`,
+      );
+      // A fuzzy match is a guess about which requisition this is; a committed
+      // status means the row carries history that exists nowhere else. That
+      // combination is the exact shape of both measured losses, and it is worth
+      // a second look even when the guess is right — so warn rather than merge
+      // silently. NOT a refusal: "Senior Platform Engineer, Observability" vs
+      // "Sr Platform Engineer, Observability (Remote)" is one req reworded on an
+      // Applied row, and must still write through.
+      if (dupReason === 'fuzzy' && isCommittedStatus(duplicate.status)) {
+        console.warn(
+          `⚠️  That row's status is ${duplicate.status} — it holds application `
+          + `history. It was matched by title resemblance, not by URL or report `
+          + `number. Confirm "${addition.role}" is the same requisition as `
+          + `"${duplicate.role}"; if it is not, split the row back out.`,
+        );
+      }
     } else {
       // Unreachable once `raw` is refreshed above, but never silent again: a
       // row we cannot locate means the addition was NOT applied, so say so,

@@ -93,6 +93,22 @@ export const SHORT_SPECIALTY = new Set([
   'api', 'sre', 'sdk', 'cli', 'gpu', 'cpu',
   'ios', 'qa', 'ux', 'ui', 'ar', 'vr',
   'ocr', 'crm', 'erp',
+  // Added from a frequency audit of a real 582-row tracker (#4291). The >3-char
+  // filter was erasing the ONLY distinguishing word from same-company title
+  // pairs, which is the mutual-specialization bug one layer down: "Senior
+  // Engineering Manager, GTM" and "..., Product" both tokenized to
+  // [engineering, manager] (+product), and "Engineering Manager, IAM" collided
+  // with "..., Platform Engineering" the same way. Two of the pairs this
+  // erasure left matchable were rows in Applied status.
+  //
+  // Scope is deliberate: domain, technology and function acronyms only.
+  // Seniority markers (sr, vp, svp, evp, mgr), level markers (i, ii, iii) and
+  // grammar words (of, and, for, end, new) are excluded — extractSeniorities,
+  // extractLevels and ROLE_STOPWORDS already own those, and promoting them to
+  // content tokens would make every "Senior X" differ from "X".
+  'ai', 'ml', 'fde', 'gtm', 'iam', 'gov', 'ops',
+  'web', 'app', 'rcm', 'ehr', 'sap', 'dns', 'vpn',
+  'dna', 'ads', 'sem', 'tax', 'pay', 'rss', 'js', 'os', 'ip',
 ]);
 
 // Generic role-level descriptors. Two titles whose only overlap is in this set
@@ -283,16 +299,31 @@ export function roleFuzzyMatch(a, b) {
     if (extraTokens.some(w => !BASELINE_TOKENS.has(w))) return false;
   }
 
-  // A level on ONE side alone is usually a loose rewrite ("Insurance
-  // Specialist" vs "Insurance Specialist II" tokenize identically, since a
-  // level is not a content token) — unless each title also carries a word the
-  // other lacks. Then the one-sided level compounds a vocabulary difference
-  // instead of decorating an identical title: "Front Desk Assistant (Summer
-  // Housing)" vs "Administrative Assistant II (Housing Front Desk)" differ by
-  // "summer" vs "administrative" AND by the stated level, which is two
-  // disagreements, not a loose rewrite (#4058). Mirrors the subset guard
-  // above: baseline-only differences do not split.
-  if ((lvlA.size > 0) !== (lvlB.size > 0)) {
+  // MUTUAL SPECIALIZATION: each side carries a non-baseline word the other
+  // lacks. The subset guard above is the one-sided case of this — a generic
+  // base title vs the same title plus a team suffix. This is the two-sided
+  // case, and it is the stronger signal: two titles that each name a
+  // different team are two separately-postable openings, not one opening
+  // loosely rewritten.
+  //
+  // Jaccard alone cannot see this. Two same-length token sets sharing a
+  // generic prefix score exactly 3/5 = 0.60 and clear the threshold on the
+  // nose, which is how "Engineering Manager, UI Platform" matched
+  // "Engineering Manager, Claude Platform" and "Manager, Software Engineering
+  // (App Experiences)" matched "(App Infrastructure)" — the words that make
+  // them distinct reqs were the only words not being compared (#4291).
+  //
+  // Measured cost of getting this wrong in merge-tracker: a live
+  // `Affirm / Manager, Software Engineering (App Experiences)` row at 4.4,
+  // status Applied, was overwritten in place by an unrelated 2.0/SKIP
+  // evaluation of (App Infrastructure) — same date, same score, same report
+  // link, the application history gone. The merge reported "+0 added,
+  // 2 updated". The tracker is gitignored and no .bak is written.
+  //
+  // Formerly gated on a one-sided level difference (#4058); that case is the
+  // same disagreement with a level stacked on top, so it is subsumed here.
+  // Mirrors the subset guard: baseline-only differences never split.
+  {
     const setA = new Set(wordsA);
     const uniqueA = wordsA.filter(w => !setB.has(w));
     const uniqueB = wordsB.filter(w => !setA.has(w));
