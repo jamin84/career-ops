@@ -185,3 +185,13 @@ public commit with a stated reason.
 - @JAYPHARMA | 2026-09-27 | id:187297453 | src:https://github.com/career-ops-hq/career-ops/discussions/4512 | n:137
 - @michelle-toftely | 2026-09-27 | "I want hiring to become an evaluation of capability and future impact, rather than a checklist of historical titles." | id:334648826 | src:https://github.com/career-ops-hq/career-ops/discussions/4520 | n:138
 - @juanpabloescamilla-ing | 2026-09-28 | "Si puede servir para encontar un empleo mejor, me parece una interesante practica" | id:321902910 | src:https://github.com/career-ops-hq/career-ops/discussions/4568 | n:139
+- @faizhameed | Faiz Hameed | 2026-09-30 | id:41015883 | src:https://github.com/career-ops-hq/career-ops/discussions/4637 | n:140
+- @sec-js | 2026-09-30 | id:54868859 | src:https://github.com/career-ops-hq/career-ops/discussions/4654 | n:141
+- @nguyentuanngoc21 | 2026-10-01 | "I am trying with it, it looks good" | id:82352476 | src:https://github.com/career-ops-hq/career-ops/discussions/4662 | n:142
+- @Krandheer | Randheer | 2026-10-02 | id:37265128 | src:https://github.com/career-ops-hq/career-ops/discussions/4712 | n:143
+- @JohnFScha | John F. | 2026-10-05 | "We need more tools like this, long live OSS" | id:115885102 | src:https://github.com/career-ops-hq/career-ops/discussions/4775 | n:144
+- @dineshmannam | Dinesh Mannam | 2026-10-06 | id:30947154 | src:https://github.com/career-ops-hq/career-ops/discussions/4828 | n:145
+- @kalilurrahman | Kalilur Rahman | 2026-10-07 | "Great tool. Nice choice for great candidates to apply to good companies" | id:54368215 | src:https://github.com/career-ops-hq/career-ops/discussions/4839 | n:146
+- @Sandeep12a7 | Sandeep Vaskuri | 2026-10-08 | id:130230409 | src:https://github.com/career-ops-hq/career-ops/discussions/4857 | n:147
+- @Akane1986 | Diana | 2026-10-08 | "Now lets use IA to get the next level of my career" | id:130022501 | src:https://github.com/career-ops-hq/career-ops/discussions/4862 | n:148
+- @hgomecre | 2026-10-09 | id:275106938 | src:https://github.com/career-ops-hq/career-ops/discussions/4881 | n:149

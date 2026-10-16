@@ -4,7 +4,7 @@
 // (top-level lock + merge), so this exercises the real merge path as a CLI
 // integration test via the CAREER_OPS_TRACKER / CAREER_OPS_ADDITIONS env
 // overrides the script already supports for test isolation.
-import { pass, fail, NODE, ROOT } from './helpers.mjs';
+import { pass, fail, NODE, ROOT, isolatedBatchStatePath } from './helpers.mjs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { execFileSync, spawnSync } from 'child_process';
@@ -67,7 +67,7 @@ function runMergeDetailed(additions, opts = {}) {
       encoding: 'utf-8',
       timeout: 30000,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, CAREER_OPS_TRACKER: tracker, CAREER_OPS_ADDITIONS: addsDir },
+      env: { ...process.env, CAREER_OPS_TRACKER: tracker, CAREER_OPS_ADDITIONS: addsDir, CAREER_OPS_BATCH_STATE: isolatedBatchStatePath(addsDir) },
     });
     const stdout = String(proc.stdout ?? '');
     const stderr = String(proc.stderr ?? '');
